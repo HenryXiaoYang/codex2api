@@ -105,7 +105,7 @@ func main() {
 		serveAdmin := func(c *gin.Context) {
 			fp := c.Param("filepath")
 			// 尝试打开请求的文件（排除目录和根路径）
-			if fp != "/" {
+			if fp != "/" && len(fp) > 1 {
 				trimmed := fp[1:] // 去掉开头的 /
 				if f, err := subFS.Open(trimmed); err == nil {
 					fi, statErr := f.Stat()
