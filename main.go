@@ -92,16 +92,21 @@ func main() {
 		httpFS := http.FS(subFS)
 		// SPA 回退：所有 /admin/* 路径优先尝试静态文件，找不到则返回 index.html
 		r.GET("/admin/*filepath", func(c *gin.Context) {
-			filepath := c.Param("filepath")
-			// 尝试打开请求的文件
-			f, err := subFS.Open(filepath[1:]) // 去掉开头的 /
-			if err == nil {
-				f.Close()
-				// 文件存在，直接提供静态文件服务
-				c.FileFromFS(filepath, httpFS)
-				return
+			fp := c.Param("filepath")
+			if fp == "/" {
+				fp = "/index.html"
 			}
-			// 文件不存在，返回 index.html（让 React Router 处理）
+			// 尝试打开请求的文件（排除目录）
+			trimmed := fp[1:] // 去掉开头的 /
+			if f, err := subFS.Open(trimmed); err == nil {
+				fi, statErr := f.Stat()
+				f.Close()
+				if statErr == nil && !fi.IsDir() {
+					c.FileFromFS(fp, httpFS)
+					return
+				}
+			}
+			// 文件不存在或者是目录 → 返回 index.html（让 React Router 处理）
 			c.FileFromFS("/index.html", httpFS)
 		})
 	}
