@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, RefreshCw } from 'lucide-react'
 import { api } from '../api'
@@ -14,6 +15,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Select } from '@/components/ui/select'
 
 export default function SchedulerBoard() {
+  const { t } = useTranslation()
   const [tierFilter, setTierFilter] = useState('all')
   const [sortBy, setSortBy] = useState('risk')
   const [page, setPage] = useState(1)
@@ -130,26 +132,26 @@ export default function SchedulerBoard() {
       loading={loading}
       error={error}
       onRetry={() => void reload()}
-      loadingTitle="正在加载调度面板"
-      loadingDescription="账号健康分层和调度数据正在同步。"
-      errorTitle="调度面板加载失败"
+      loadingTitle={t('scheduler.loadingTitle')}
+      loadingDescription={t('scheduler.loadingDesc')}
+      errorTitle={t('scheduler.errorTitle')}
     >
       <>
         <PageHeader
-          title="调度面板"
-          description="独立查看账号健康分层、风险信号和调度排序结果。"
+          title={t('scheduler.title')}
+          description={t('scheduler.description')}
           actions={
             <div className="flex items-center gap-3 max-sm:w-full max-sm:flex-col max-sm:items-stretch">
               <Button variant="outline" asChild>
                 <Link to="/ops">
                   <ArrowLeft className="size-3.5" />
-                  系统运维
+                  {t('nav.ops')}
                 </Link>
               </Button>
-              <span className="text-sm text-muted-foreground max-sm:text-center">最后更新时间：{updatedLabel}</span>
+              <span className="text-sm text-muted-foreground max-sm:text-center">{t('scheduler.lastUpdated', { time: updatedLabel })}</span>
               <Button variant="outline" onClick={() => void reload()}>
                 <RefreshCw className="size-3.5" />
-                刷新
+                {t('common.refresh')}
               </Button>
             </div>
           }
@@ -158,18 +160,18 @@ export default function SchedulerBoard() {
         {overview ? (
           <>
             <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4 mb-6">
-              <SummaryPill label="账号总量" value={formatNumber(accounts.length)} />
-              <SummaryPill label="可调度账号" value={`${overview.runtime.available_accounts} / ${overview.runtime.total_accounts}`} />
+              <SummaryPill label={t('scheduler.totalAccounts')} value={formatNumber(accounts.length)} />
+              <SummaryPill label={t('scheduler.availableAccounts')} value={`${overview.runtime.available_accounts} / ${overview.runtime.total_accounts}`} />
               <SummaryPill label="Healthy + Warm" value={formatNumber(schedulerCounts.healthy + schedulerCounts.warm)} />
-              <SummaryPill label="高风险账号" value={formatNumber(schedulerCounts.risky + schedulerCounts.banned)} />
+              <SummaryPill label={t('scheduler.highRiskAccounts')} value={formatNumber(schedulerCounts.risky + schedulerCounts.banned)} />
             </div>
 
             <Card className="mb-6">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between gap-4 max-sm:flex-col max-sm:items-start">
                   <div>
-                    <h3 className="text-base font-semibold text-foreground">调度全局视图</h3>
-                    <p className="mt-1 text-sm text-muted-foreground">从系统维度查看当前号池健康分层和高风险账号分布。</p>
+                    <h3 className="text-base font-semibold text-foreground">{t('scheduler.globalView')}</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">{t('scheduler.globalViewDesc')}</p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <SchedulerPill label="Healthy" value={schedulerCounts.healthy} tone="success" />
@@ -181,34 +183,34 @@ export default function SchedulerBoard() {
 
                 <div className="mt-4 grid gap-3 md:grid-cols-3">
                   <MiniOpsCard
-                    label="最近 401"
+                    label={t('scheduler.recent401')}
                     value={formatNumber(recentIssueCounts.unauthorized24h)}
-                    sub="24 小时内被判定 unauthorized 的账号数"
+                    sub={t('scheduler.recent401Desc')}
                     tone="danger"
                   />
                   <MiniOpsCard
-                    label="最近 429"
+                    label={t('scheduler.recent429')}
                     value={formatNumber(recentIssueCounts.rateLimited1h)}
-                    sub="1 小时内触发限流的账号数"
+                    sub={t('scheduler.recent429Desc')}
                     tone="warning"
                   />
                   <MiniOpsCard
-                    label="最近 Timeout"
+                    label={t('scheduler.recentTimeout')}
                     value={formatNumber(recentIssueCounts.timeout15m)}
-                    sub="15 分钟内出现超时的账号数"
+                    sub={t('scheduler.recentTimeoutDesc')}
                     tone="neutral"
                   />
                 </div>
 
-                <div className="mt-5 flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-white/45 px-4 py-3">
-                  <span className="text-[12px] font-semibold text-muted-foreground">筛选</span>
+                <div className="mt-5 flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-white/45 dark:bg-white/5 px-4 py-3">
+                  <span className="text-[12px] font-semibold text-muted-foreground">{t('scheduler.filter')}</span>
                   <div className="w-[180px]">
                     <Select
                       value={tierFilter}
                       onValueChange={setTierFilter}
                       options={[
-                        { label: '全部风险账号', value: 'all' },
-                        { label: '全部账号', value: 'everything' },
+                        { label: t('scheduler.filterAllRisk'), value: 'all' },
+                        { label: t('scheduler.filterAll'), value: 'everything' },
                         { label: 'Healthy', value: 'healthy' },
                         { label: 'Warm', value: 'warm' },
                         { label: 'Risky', value: 'risky' },
@@ -216,17 +218,17 @@ export default function SchedulerBoard() {
                       ]}
                     />
                   </div>
-                  <span className="text-[12px] font-semibold text-muted-foreground">排序</span>
+                  <span className="text-[12px] font-semibold text-muted-foreground">{t('scheduler.sort')}</span>
                   <div className="w-[200px]">
                     <Select
                       value={sortBy}
                       onValueChange={setSortBy}
                       options={[
-                        { label: '风险优先', value: 'risk' },
-                        { label: '分数升序', value: 'score_asc' },
-                        { label: '7d 用量高优先', value: 'usage_desc' },
-                        { label: '延迟惩罚高优先', value: 'latency_penalty' },
-                        { label: '401 近期优先', value: 'unauthorized' },
+                        { label: t('scheduler.sortRisk'), value: 'risk' },
+                        { label: t('scheduler.sortScoreAsc'), value: 'score_asc' },
+                        { label: t('scheduler.sortUsageDesc'), value: 'usage_desc' },
+                        { label: t('scheduler.sortLatencyPenalty'), value: 'latency_penalty' },
+                        { label: t('scheduler.sortUnauthorized'), value: 'unauthorized' },
                       ]}
                     />
                   </div>
@@ -236,21 +238,21 @@ export default function SchedulerBoard() {
                   <>
                     <div className="mt-5 grid gap-3 md:grid-cols-2">
                     {pagedAccounts.map((account) => (
-                      <div key={account.id} className="rounded-2xl border border-border bg-white/50 px-4 py-3">
+                      <div key={account.id} className="rounded-2xl border border-border bg-white/50 dark:bg-white/5 px-4 py-3">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <div className="truncate text-[14px] font-semibold text-foreground">
                               {account.email || `ID ${account.id}`}
                             </div>
                             <div className="mt-1 text-[12px] text-muted-foreground">
-                              分 {Math.round(account.scheduler_score ?? 0)} · 并发 {account.dynamic_concurrency_limit ?? '-'} · 套餐 {account.plan_type || '-'}
+                              {t('scheduler.score')} {Math.round(account.scheduler_score ?? 0)} · {t('scheduler.concurrency')} {account.dynamic_concurrency_limit ?? '-'} · {t('scheduler.plan')} {account.plan_type || '-'}
                             </div>
                           </div>
                           <StatusBadge status={account.status} />
                         </div>
                         <div className="mt-3 flex flex-wrap items-center gap-2">
                           <Badge variant="outline" className={getHealthTierClassName(account.health_tier)}>
-                            {formatHealthTier(account.health_tier)}
+                            {formatHealthTier(account.health_tier, t)}
                           </Badge>
                           {account.usage_percent_7d !== null && account.usage_percent_7d !== undefined ? (
                             <Badge variant="outline" className="text-[12px]">
@@ -259,7 +261,7 @@ export default function SchedulerBoard() {
                           ) : null}
                         </div>
                         <div className="mt-3 flex flex-wrap items-center gap-2">
-                          {buildScoreReasonTags(account).map((tag) => (
+                          {buildScoreReasonTags(account, t).map((tag) => (
                             <Badge key={tag.label} variant="outline" className={tag.className}>
                               {tag.label}
                             </Badge>
@@ -281,8 +283,8 @@ export default function SchedulerBoard() {
                     )}
                   </>
                 ) : (
-                  <div className="mt-5 rounded-2xl border border-border bg-white/40 px-4 py-4 text-sm text-muted-foreground">
-                    当前没有需要重点关注的风险账号，号池整体处于稳定状态。
+                  <div className="mt-5 rounded-2xl border border-border bg-white/40 dark:bg-white/5 px-4 py-4 text-sm text-muted-foreground">
+                    {t('scheduler.noRiskAccounts')}
                   </div>
                 )}
               </CardContent>
@@ -296,7 +298,7 @@ export default function SchedulerBoard() {
 
 function SummaryPill({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-border bg-white/65 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
+    <div className="rounded-2xl border border-border bg-white/65 dark:bg-white/5 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] dark:shadow-none">
       <div className="text-[12px] font-bold tracking-[0.14em] uppercase text-muted-foreground">{label}</div>
       <div className="mt-2 text-[20px] font-bold tracking-tight text-foreground">{value}</div>
     </div>
@@ -345,7 +347,7 @@ function MiniOpsCard({
   }[tone]
 
   return (
-    <div className="rounded-2xl border border-border bg-white/45 px-4 py-4">
+    <div className="rounded-2xl border border-border bg-white/45 dark:bg-white/5 px-4 py-4">
       <div className="text-[12px] font-semibold text-muted-foreground">{label}</div>
       <div className="mt-2 text-[28px] font-bold leading-none tracking-tight text-foreground">{value}</div>
       <div className={`mt-3 inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${toneStyle}`}>
@@ -370,22 +372,23 @@ function getHealthTierClassName(healthTier?: string) {
   }
 }
 
-function formatHealthTier(healthTier?: string) {
+function formatHealthTier(healthTier?: string, t?: any) {
+  if (!t) return 'Unknown'
   switch (healthTier) {
     case 'healthy':
-      return '健康'
+      return t('scheduler.healthHealthy')
     case 'warm':
-      return '预热'
+      return t('scheduler.healthWarm')
     case 'risky':
-      return '风险'
+      return t('scheduler.healthRisky')
     case 'banned':
-      return '隔离'
+      return t('scheduler.healthBanned')
     default:
-      return '未知'
+      return t('scheduler.healthUnknown')
   }
 }
 
-function buildScoreReasonTags(account: AccountRow) {
+function buildScoreReasonTags(account: AccountRow, t: any) {
   const breakdown = account.scheduler_breakdown
   if (!breakdown) {
     return []
@@ -400,22 +403,22 @@ function buildScoreReasonTags(account: AccountRow) {
     tags.push({ label: `429 -${Math.round(breakdown.rate_limit_penalty)}`, className: 'border-transparent bg-amber-500/10 text-amber-600 dark:bg-amber-500/20 dark:text-amber-300' })
   }
   if (breakdown.timeout_penalty > 0) {
-    tags.push({ label: `超时 -${Math.round(breakdown.timeout_penalty)}`, className: 'border-transparent bg-orange-500/10 text-orange-600 dark:bg-orange-500/20 dark:text-orange-300' })
+    tags.push({ label: `${t('scheduler.reasonTimeout')} -${Math.round(breakdown.timeout_penalty)}`, className: 'border-transparent bg-orange-500/10 text-orange-600 dark:bg-orange-500/20 dark:text-orange-300' })
   }
   if (breakdown.server_penalty > 0) {
     tags.push({ label: `5xx -${Math.round(breakdown.server_penalty)}`, className: 'border-transparent bg-rose-500/10 text-rose-600 dark:bg-rose-500/20 dark:text-rose-300' })
   }
   if (breakdown.failure_penalty > 0) {
-    tags.push({ label: `失败串 -${Math.round(breakdown.failure_penalty)}`, className: 'border-transparent bg-slate-500/10 text-slate-600 dark:bg-slate-500/20 dark:text-slate-300' })
+    tags.push({ label: `${t('scheduler.reasonFailure')} -${Math.round(breakdown.failure_penalty)}`, className: 'border-transparent bg-slate-500/10 text-slate-600 dark:bg-slate-500/20 dark:text-slate-300' })
   }
   if (breakdown.usage_penalty_7d > 0) {
     tags.push({ label: `7d -${Math.round(breakdown.usage_penalty_7d)}`, className: 'border-transparent bg-fuchsia-500/10 text-fuchsia-600 dark:bg-fuchsia-500/20 dark:text-fuchsia-300' })
   }
   if (breakdown.latency_penalty > 0) {
-    tags.push({ label: `延迟 -${Math.round(breakdown.latency_penalty)}`, className: 'border-transparent bg-cyan-500/10 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-300' })
+    tags.push({ label: `${t('scheduler.reasonLatency')} -${Math.round(breakdown.latency_penalty)}`, className: 'border-transparent bg-cyan-500/10 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-300' })
   }
   if (breakdown.success_bonus > 0) {
-    tags.push({ label: `成功 +${Math.round(breakdown.success_bonus)}`, className: 'border-transparent bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-300' })
+    tags.push({ label: `${t('scheduler.reasonSuccess')} +${Math.round(breakdown.success_bonus)}`, className: 'border-transparent bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-300' })
   }
 
   return tags

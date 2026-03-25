@@ -78,8 +78,8 @@ export default function Layout({ children }: PropsWithChildren) {
 
             {/* Footer */}
             <div className="mt-auto flex items-center justify-between">
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/16 bg-[hsl(var(--success-bg))] px-3 py-1.5 text-[11px] font-bold text-[hsl(var(--success))] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]">
-                <span className="size-2 rounded-full bg-emerald-500" />
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/16 bg-[hsl(var(--success-bg))] px-3 py-1.5 text-[11px] font-bold text-[hsl(var(--success))] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] shrink-0 whitespace-nowrap">
+                <span className="size-2 rounded-full bg-emerald-500 shrink-0" />
                 {t('common.online')}
               </span>
               <div className="flex items-center gap-0.5">
@@ -134,7 +134,7 @@ export default function Layout({ children }: PropsWithChildren) {
               >
                 {theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
               </button>
-              <span className="inline-flex items-center justify-center min-h-[28px] px-2.5 rounded-full text-[12px] font-bold bg-[hsl(var(--success-bg))] text-[hsl(var(--success))]">
+              <span className="inline-flex items-center justify-center min-h-[28px] px-2.5 rounded-full text-[12px] font-bold bg-[hsl(var(--success-bg))] text-[hsl(var(--success))] shrink-0 whitespace-nowrap">
                 {t('common.online')}
               </span>
             </div>
