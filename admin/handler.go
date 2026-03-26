@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -381,8 +382,33 @@ func (h *Handler) AddAccount(c *gin.Context) {
 	})
 }
 
-// ImportAccounts 通过 TXT 文件批量导入账号（每行一个 RT）
+// importToken 导入时的统一 token 载体
+type importToken struct {
+	refreshToken string
+	name         string
+}
+
+// jsonAccountEntry CLIProxyAPI 凭证 JSON 条目
+type jsonAccountEntry struct {
+	RefreshToken string `json:"refresh_token"`
+	Email        string `json:"email"`
+}
+
+// ImportAccounts 批量导入账号（支持 TXT / JSON）
 func (h *Handler) ImportAccounts(c *gin.Context) {
+	format := c.DefaultPostForm("format", "txt")
+	proxyURL := c.PostForm("proxy_url")
+
+	switch format {
+	case "json":
+		h.importAccountsJSON(c, proxyURL)
+	default:
+		h.importAccountsTXT(c, proxyURL)
+	}
+}
+
+// importAccountsTXT 通过 TXT 文件导入（每行一个 RT）
+func (h *Handler) importAccountsTXT(c *gin.Context, proxyURL string) {
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
 		writeError(c, http.StatusBadRequest, "请上传文件（字段名: file）")
@@ -390,13 +416,10 @@ func (h *Handler) ImportAccounts(c *gin.Context) {
 	}
 	defer file.Close()
 
-	// 限制文件大小 2MB
 	if header.Size > 2*1024*1024 {
 		writeError(c, http.StatusBadRequest, "文件大小不能超过 2MB")
 		return
 	}
-
-	proxyURL := c.PostForm("proxy_url")
 
 	data, err := io.ReadAll(file)
 	if err != nil {
@@ -407,13 +430,13 @@ func (h *Handler) ImportAccounts(c *gin.Context) {
 	// 按行分割，去重
 	lines := strings.Split(string(data), "\n")
 	seen := make(map[string]bool)
-	var tokens []string
+	var tokens []importToken
 	for _, line := range lines {
 		t := strings.TrimSpace(line)
 		t = strings.TrimPrefix(t, "\xef\xbb\xbf") // 去除 UTF-8 BOM
 		if t != "" && !seen[t] {
 			seen[t] = true
-			tokens = append(tokens, t)
+			tokens = append(tokens, importToken{refreshToken: t})
 		}
 	}
 
@@ -422,21 +445,102 @@ func (h *Handler) ImportAccounts(c *gin.Context) {
 		return
 	}
 
+	h.importAccountsCommon(c, tokens, proxyURL)
+}
+
+// importAccountsJSON 通过 JSON 文件导入（兼容 CLIProxyAPI 凭证格式）
+func (h *Handler) importAccountsJSON(c *gin.Context, proxyURL string) {
+	if err := c.Request.ParseMultipartForm(32 << 20); err != nil {
+		writeError(c, http.StatusBadRequest, "解析表单失败")
+		return
+	}
+
+	files := c.Request.MultipartForm.File["file"]
+	if len(files) == 0 {
+		writeError(c, http.StatusBadRequest, "请上传至少一个 JSON 文件")
+		return
+	}
+
+	var allTokens []importToken
+
+	for _, fh := range files {
+		if fh.Size > 2*1024*1024 {
+			writeError(c, http.StatusBadRequest, fmt.Sprintf("文件 %s 大小超过 2MB", fh.Filename))
+			return
+		}
+
+		f, err := fh.Open()
+		if err != nil {
+			writeError(c, http.StatusBadRequest, fmt.Sprintf("打开文件 %s 失败", fh.Filename))
+			return
+		}
+		data, err := io.ReadAll(f)
+		f.Close()
+		if err != nil {
+			writeError(c, http.StatusBadRequest, fmt.Sprintf("读取文件 %s 失败", fh.Filename))
+			return
+		}
+
+		// 去除 UTF-8 BOM
+		data = []byte(strings.TrimPrefix(string(data), "\xef\xbb\xbf"))
+
+		// 尝试解析为数组，失败则尝试单对象
+		var entries []jsonAccountEntry
+		if err := json.Unmarshal(data, &entries); err != nil {
+			var single jsonAccountEntry
+			if err := json.Unmarshal(data, &single); err != nil {
+				writeError(c, http.StatusBadRequest, fmt.Sprintf("文件 %s 不是有效的 JSON 格式", fh.Filename))
+				return
+			}
+			entries = []jsonAccountEntry{single}
+		}
+
+		for _, entry := range entries {
+			rt := strings.TrimSpace(entry.RefreshToken)
+			if rt == "" {
+				continue
+			}
+			allTokens = append(allTokens, importToken{
+				refreshToken: rt,
+				name:         strings.TrimSpace(entry.Email),
+			})
+		}
+	}
+
+	if len(allTokens) == 0 {
+		writeError(c, http.StatusBadRequest, "JSON 文件中未找到有效的 refresh_token")
+		return
+	}
+
+	h.importAccountsCommon(c, allTokens, proxyURL)
+}
+
+// importAccountsCommon 公共的去重、插入、刷新逻辑
+func (h *Handler) importAccountsCommon(c *gin.Context, tokens []importToken, proxyURL string) {
+	// 文件内去重
+	seen := make(map[string]bool)
+	var unique []importToken
+	for _, t := range tokens {
+		if !seen[t.refreshToken] {
+			seen[t.refreshToken] = true
+			unique = append(unique, t)
+		}
+	}
+
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 60*time.Second)
 	defer cancel()
 
-	// 查询已有 RT 进行去重
+	// 数据库去重
 	existingRTs, err := h.db.GetAllRefreshTokens(ctx)
 	if err != nil {
 		log.Printf("查询已有 RT 失败: %v", err)
-		existingRTs = make(map[string]bool) // 查询失败时不阻塞导入
+		existingRTs = make(map[string]bool)
 	}
 
-	// 过滤掉已存在的 RT
-	var newTokens []string
+	var newTokens []importToken
 	duplicateCount := 0
-	for _, t := range tokens {
-		if existingRTs[t] {
+	for _, t := range unique {
+		if existingRTs[t.refreshToken] {
 			duplicateCount++
 		} else {
 			newTokens = append(newTokens, t)
@@ -445,11 +549,11 @@ func (h *Handler) ImportAccounts(c *gin.Context) {
 
 	if len(newTokens) == 0 {
 		c.JSON(http.StatusOK, gin.H{
-			"message":   fmt.Sprintf("所有 %d 个 RT 已存在，无需导入", len(tokens)),
+			"message":   fmt.Sprintf("所有 %d 个 RT 已存在，无需导入", len(unique)),
 			"success":   0,
 			"duplicate": duplicateCount,
 			"failed":    0,
-			"total":     len(tokens),
+			"total":     len(unique),
 		})
 		return
 	}
@@ -457,14 +561,16 @@ func (h *Handler) ImportAccounts(c *gin.Context) {
 	successCount := 0
 	failCount := 0
 
-	// 并发刷新控制（最多 10 个并发）
 	sem := make(chan struct{}, 10)
 	var wg sync.WaitGroup
 
-	for i, rt := range newTokens {
-		name := fmt.Sprintf("import-%d", i+1)
+	for i, t := range newTokens {
+		name := t.name
+		if name == "" {
+			name = fmt.Sprintf("import-%d", i+1)
+		}
 
-		id, err := h.db.InsertAccount(ctx, name, rt, proxyURL)
+		id, err := h.db.InsertAccount(ctx, name, t.refreshToken, proxyURL)
 		if err != nil {
 			log.Printf("导入账号 %d 失败: %v", i+1, err)
 			failCount++
@@ -475,12 +581,11 @@ func (h *Handler) ImportAccounts(c *gin.Context) {
 
 		newAcc := &auth.Account{
 			DBID:         id,
-			RefreshToken: rt,
+			RefreshToken: t.refreshToken,
 			ProxyURL:     proxyURL,
 		}
 		h.store.AddAccount(newAcc)
 
-		// 受控并发刷新
 		wg.Add(1)
 		sem <- struct{}{}
 		go func(accountID int64) {
@@ -496,7 +601,6 @@ func (h *Handler) ImportAccounts(c *gin.Context) {
 		}(id)
 	}
 
-	// 等待所有刷新完成
 	wg.Wait()
 
 	msg := fmt.Sprintf("成功导入 %d 个账号", successCount)
@@ -512,7 +616,7 @@ func (h *Handler) ImportAccounts(c *gin.Context) {
 		"success":   successCount,
 		"duplicate": duplicateCount,
 		"failed":    failCount,
-		"total":     len(tokens),
+		"total":     len(unique),
 	})
 }
 

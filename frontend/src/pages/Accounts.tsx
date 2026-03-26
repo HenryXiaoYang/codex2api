@@ -24,7 +24,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Plus, RefreshCw, Trash2, Zap, FlaskConical, Ban, Timer, Upload, KeyRound, ExternalLink } from 'lucide-react'
+import { Plus, RefreshCw, Trash2, Zap, FlaskConical, Ban, Timer, Upload, KeyRound, ExternalLink, FileText, FileJson } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 export default function Accounts() {
@@ -49,6 +49,7 @@ export default function Accounts() {
   const [cleaningRateLimited, setCleaningRateLimited] = useState(false)
   const [testingAccount, setTestingAccount] = useState<AccountRow | null>(null)
   const [importing, setImporting] = useState(false)
+  const [showImportPicker, setShowImportPicker] = useState(false)
   const [addMethod, setAddMethod] = useState<'rt' | 'oauth'>('rt')
   const [oauthStep, setOauthStep] = useState<'generate' | 'exchange'>('generate')
   const [oauthSession, setOauthSession] = useState<{ session_id: string; auth_url: string } | null>(null)
@@ -58,6 +59,7 @@ export default function Accounts() {
   const [oauthGenerating, setOauthGenerating] = useState(false)
   const [oauthCompleting, setOauthCompleting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const jsonInputRef = useRef<HTMLInputElement>(null)
   const { toast, showToast } = useToast()
   const { confirm, confirmDialog } = useConfirmDialog()
 
@@ -231,6 +233,7 @@ export default function Accounts() {
       return
     }
     setImporting(true)
+    setShowImportPicker(false)
     try {
       const formData = new FormData()
       formData.append('file', file)
@@ -247,6 +250,33 @@ export default function Accounts() {
     } finally {
       setImporting(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  const handleJsonImport = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files
+    if (!files || files.length === 0) return
+    setImporting(true)
+    setShowImportPicker(false)
+    try {
+      const formData = new FormData()
+      formData.append('format', 'json')
+      for (let i = 0; i < files.length; i++) {
+        formData.append('file', files[i])
+      }
+      const res = await fetch('/api/admin/accounts/import', { method: 'POST', body: formData, headers: getAdminKey() ? { 'X-Admin-Key': getAdminKey() } : {} })
+      const data = await res.json()
+      if (!res.ok) {
+        showToast(data.error ? t('accounts.importFailedWithReason', { error: data.error }) : t('accounts.importFailed'), 'error')
+      } else {
+        showToast(t('accounts.importCompleted'))
+        void reload()
+      }
+    } catch (error) {
+      showToast(t('accounts.importFailedWithReason', { error: getErrorMessage(error) }), 'error')
+    } finally {
+      setImporting(false)
+      if (jsonInputRef.current) jsonInputRef.current.value = ''
     }
   }
 
@@ -421,7 +451,7 @@ export default function Accounts() {
                 <Plus className="size-3.5" />
                 {t('accounts.addAccount')}
               </Button>
-              <Button variant="outline" disabled={importing} onClick={() => fileInputRef.current?.click()}>
+              <Button variant="outline" disabled={importing} onClick={() => setShowImportPicker(true)}>
                 <Upload className="size-3.5" />
                 {importing ? t('accounts.importing') : t('accounts.importFile')}
               </Button>
@@ -431,6 +461,14 @@ export default function Accounts() {
                 accept=".txt"
                 className="hidden"
                 onChange={(e) => void handleFileImport(e)}
+              />
+              <input
+                ref={jsonInputRef}
+                type="file"
+                accept=".json"
+                multiple
+                className="hidden"
+                onChange={(e) => void handleJsonImport(e)}
               />
             </div>
           )}
@@ -801,6 +839,46 @@ export default function Accounts() {
               )}
             </div>
           )}
+        </Modal>
+
+        <Modal
+          show={showImportPicker}
+          title={t('accounts.importTitle')}
+          contentClassName="sm:max-w-[420px]"
+          onClose={() => setShowImportPicker(false)}
+        >
+          <div className="space-y-3">
+            <button
+              className="w-full rounded-xl border border-border p-4 text-left hover:bg-muted/50 transition-colors"
+              onClick={() => {
+                setShowImportPicker(false)
+                fileInputRef.current?.click()
+              }}
+            >
+              <div className="flex items-center gap-3">
+                <FileText className="size-5 text-muted-foreground" />
+                <div>
+                  <div className="font-medium">{t('accounts.importTxt')}</div>
+                  <div className="text-xs text-muted-foreground">{t('accounts.importTxtDesc')}</div>
+                </div>
+              </div>
+            </button>
+            <button
+              className="w-full rounded-xl border border-border p-4 text-left hover:bg-muted/50 transition-colors"
+              onClick={() => {
+                setShowImportPicker(false)
+                jsonInputRef.current?.click()
+              }}
+            >
+              <div className="flex items-center gap-3">
+                <FileJson className="size-5 text-muted-foreground" />
+                <div>
+                  <div className="font-medium">{t('accounts.importJson')}</div>
+                  <div className="text-xs text-muted-foreground">{t('accounts.importJsonDesc')}</div>
+                </div>
+              </div>
+            </button>
+          </div>
         </Modal>
 
         {testingAccount && (
